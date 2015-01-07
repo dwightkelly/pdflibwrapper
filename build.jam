@@ -1,0 +1,12 @@
+project pdflibwrapper
+	: usage-requirements <include>. <use>/boost//headers
+	: requirements <use>/boost//headers 
+;
+
+lib pdflwrap
+	: PDFLWrapper.cpp pdfwrap /SPDFsrc
+;
+
+exe wrappertest
+	: WrapperTest.cpp pdflwrap
+;
