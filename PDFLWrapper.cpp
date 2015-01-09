@@ -404,43 +404,67 @@ PDFLObject::Get(bool &bValue, const char *szKey)
 bool
 PDFLObject::Get(int &nValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(nValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(unsigned int &nValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(nValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(float &fValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(fValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(double &dValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(dValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(Name &rValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(rValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(std::string &sValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(szKey, pObject))  {
+		return pObject->Get(sValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(Object::Ptr &pValue, const char *szKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	return m_pImpl->GetValue(szKey, pValue);
 }
 
 bool
@@ -458,43 +482,71 @@ PDFLObject::Get(Stream &oValue, const char *szKey)
 bool
 PDFLObject::Get(bool &bValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(bValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(int &nValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(nValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(unsigned int &nValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(nValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(float &fValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(fValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(double &dValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(dValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(Name &rValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(rValue);
+	}
+	return false;
 }
 
 bool
 PDFLObject::Get(std::string &sValue, const Name &nmKey)
 {
-	throw std::logic_error("The method or operation is not implemented.");
+	Object::Ptr pObject;
+	if (m_pImpl->GetValue(nmKey, pObject))  {
+		return pObject->Get(sValue);
+	}
+	return false;
 }
 
 bool

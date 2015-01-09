@@ -58,6 +58,8 @@ namespace PDFLibWrapper  {
 
 		bool operator==(const Name &nmOther) const
 		{ return m_nToken == nmOther.m_nToken; }
+		bool operator!=(const Name &nmOther) const
+		{ return m_nToken != nmOther.m_nToken; }
 		bool operator<(const Name &nmOther) const
 		{ return m_nToken < nmOther.m_nToken; }
 
