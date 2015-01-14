@@ -109,7 +109,9 @@ namespace PDFLibWrapper  {
 
 	protected:
 		virtual Document *clone() const;
+		virtual Document::Ptr ClonePtr() const;
 		virtual bool OpenFile(const std::string &sFileName);
+
 
 	private:
 		boost::shared_ptr<MyImpl> m_pMyImpl;

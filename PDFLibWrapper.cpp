@@ -123,7 +123,7 @@ Document::Document(const std::string &sFileName)
 Document::Ptr
 Document::Open(const std::string &sFileName)
 {
-	Document::Ptr pNew(g_pMasterDoc->clone());
+	Document::Ptr pNew(g_pMasterDoc->ClonePtr());
 
 	if (!pNew->OpenFile(sFileName))  {
 		pNew.reset();
@@ -335,6 +335,12 @@ Object::GetString()
 {
 	std::stringstream ss;
 	switch (m_eType)  {
+		default:
+			ss << "{unknown}";
+			break;
+		case kNull:
+			ss << "null";
+			break;
 		case kBoolean:
 			{
 				bool bValue;

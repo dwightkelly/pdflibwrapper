@@ -210,6 +210,7 @@ namespace PDFLibWrapper  {
 		Document &operator=(const Document &rOther);
 
 		virtual Document *clone() const = 0;
+		virtual Document::Ptr ClonePtr() const = 0;
 
 		virtual bool OpenFile(const std::string &sFileName) = 0;
 

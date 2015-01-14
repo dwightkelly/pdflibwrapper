@@ -268,7 +268,12 @@ PDFLObject::Impl::GetKeys(NameSet &setKeys)
 		if (!m_psetNames)  {
 			m_psetNames.reset(NameSet());
 		}
-		CosObjWrapper coDict = (eType == CosStream ? CosStreamDict(m_CosObj) : m_CosObj);
+		CosObjWrapper coDict;
+		if (eType == CosStream)  {
+			coDict = CosStreamDict(m_CosObj);
+		} else  {
+			coDict =  m_CosObj;
+		}
 		if (CosObjEnum(coDict, DictEnum, this))  {
 			setKeys = *m_psetNames;
 			return true;
@@ -741,6 +746,13 @@ bool
 PDFLDoc::OpenFile(const std::string &sFileName)
 {
 	return m_pMyImpl->Open(sFileName);
+}
+
+Document::Ptr
+PDFLDoc::ClonePtr() const
+{
+	Document::Ptr pRet(clone());
+	return pRet;
 }
 
 }
