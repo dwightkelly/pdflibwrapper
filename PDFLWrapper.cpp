@@ -612,6 +612,8 @@ PDFLDoc::MyImpl::MyImpl(PDFLDoc *pOwner, const std::string &sFileName)
 bool
 PDFLDoc::MyImpl::Open(const std::string &sFileName)
 {
+	bool success = false;	// NOTE: need this since you shouldn't inside a DURING handler block
+
 	if (!sFileName.empty())  {
 		InitPDFL();
 
@@ -624,12 +626,12 @@ PDFLDoc::MyImpl::Open(const std::string &sFileName)
 			m_pdDoc = PDDocOpen((ASPathName)aspFile.get(), NULL, NULL, false);
 			if (m_pdDoc)  {
 				m_cdDoc = PDDocGetCosDoc(m_pdDoc);
-				return true;
+				success = true;
 			}
 		HANDLER
 		END_HANDLER
 	}
-	return false;
+	return success;
 }
 
 bool
