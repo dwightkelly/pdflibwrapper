@@ -22,7 +22,7 @@ namespace PDFLibWrapper  {
 
 	class PDFVersion  {
 	public:
-		PDFVersion(unsigned char nMajor = 0, unsigned char nMinor = 0)
+		PDFVersion(unsigned short nMajor = 0, unsigned short nMinor = 0)
 			: m_nMajor(nMajor), m_nMinor(nMinor)
 		{ }
 

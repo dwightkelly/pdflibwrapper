@@ -22,20 +22,35 @@
 
 namespace  {
 
-	typedef boost::shared_mutex Mutex;
-	typedef boost::upgrade_lock<Mutex> ROLock;
-	typedef boost::upgrade_to_unique_lock<Mutex> RWLock;
+	class PDFLInitter  {
+	public:
+		typedef boost::shared_mutex Mutex;
 
-	Mutex g_mtxPDFLInit;
-	bool g_bInitted = false;
+		static PDFLInitter *Get()  {
+			static Mutex g_mtxPDFLInitter;
+			static boost::scoped_ptr<PDFLInitter> g_pInstance;
+			{
+				boost::unique_lock<Mutex> lck(g_mtxPDFLInitter);
+				if (!g_pInstance)  {
+					g_pInstance.reset(new PDFLInitter);
+				}
+			}
+			return g_pInstance.get();
+		}
 
-	bool
-	InitPDFL()
-	{
-		ASInt32 nRet = 0;
-		ROLock lck(g_mtxPDFLInit);
-		if (!g_bInitted)  {
-			RWLock lckWrite(lck);
+		bool IsValid() const  { return m_bInitted; }
+
+		~PDFLInitter()  {
+			if (m_bInitted)  {
+				::PDFLTerm();
+			}
+		}
+
+	private:
+		PDFLInitter()
+			: m_bInitted(false)
+		{
+			ASInt32 nRet = 0;
 			PDFLDataRec thePDFLDataRec;
 			DURING
 				memset(&thePDFLDataRec, 0, sizeof(PDFLDataRec));
@@ -44,17 +59,20 @@ namespace  {
 			HANDLER
 				nRet = ERRORCODE;
 			END_HANDLER
-			g_bInitted = (nRet == 0);
+
+			m_bInitted = (nRet == 0);
 		}
 
-		return nRet == 0;
-	}
+		bool m_bInitted;
+	};
+
 
 	using namespace PDFLibWrapper;
 
 	typedef std::map<CosType, Object::Type> TypeMap;
 
-	// work-around for compiling on OS X
+	// work-around for compiling on OS X, since boost::assign::map_list_of
+	// was having problems compiling
 	TypeMap CreateTypeMap()  {
 		TypeMap mTemp;
 		mTemp[CosNull] = Object::kNull;
@@ -91,10 +109,10 @@ struct PDFLObject::Impl  {
 	typedef std::map<Name, ASAtom> N2AMap;
 	typedef std::map<Name, Object::Ptr> Dict;
 
-	Impl(CosObj co, PDFLDoc *pDoc);
+	Impl(CosObjWrapper co, PDFLDoc *pDoc);
 	int GetLength();
 	bool GetKeys(NameSet &setKeys);
-	CosObj GetElement(int nIndex);
+	CosObjWrapper GetElement(int nIndex);
 	bool GetValue(const char *szName, Object::Ptr &pObj);
 	bool GetValue(const Name &nmKey, Object::Ptr &pObj);
 	const Name &GetName(const char *szName);
@@ -104,14 +122,14 @@ struct PDFLObject::Impl  {
 	static ASBool DictEnum(CosObj inCosObj, CosObj inValue, void *inClientData);
 
 	PDFLDoc *m_pDoc;
-	CosObj m_CosObj;
+	CosObjWrapper m_CosObj;
 	A2NMap m_mA2NMap;
 	N2AMap m_mN2AMap;
 	boost::optional<Dict> m_pDict;
 	boost::optional<NameSet > m_psetNames;
 };
 
-PDFLObject::Impl::Impl(CosObj co, PDFLDoc *pDoc)
+PDFLObject::Impl::Impl(CosObjWrapper co, PDFLDoc *pDoc)
 : m_pDoc(pDoc), m_CosObj(co)
 {
 }
@@ -119,33 +137,38 @@ PDFLObject::Impl::Impl(CosObj co, PDFLDoc *pDoc)
 int
 PDFLObject::Impl::GetLength()
 {
-	if (CosObjGetType(m_CosObj) == CosArray)  {
-		return CosArrayLength(m_CosObj);
-	} else  {
-		return 1;
+	if (m_CosObj)  {
+		if (CosObjGetType(m_CosObj) == CosArray)  {
+			return CosArrayLength(m_CosObj);
+		} else  {
+			return 1;
+		}
 	}
+
+	return 0;
 }
 
-CosObj
+CosObjWrapper
 PDFLObject::Impl::GetElement(int nIndex)
 {
-	CosType eType = CosObjGetType(m_CosObj);
-	if (eType == CosNull)  { return CosNewNull(); }
+	CosObjWrapper coRet;
 
-	CosObj coRet;
-	int nLength = 1;
-	if (eType == CosArray)  {
-		nLength = CosArrayLength(m_CosObj);
-	}
-	if (nIndex >= nLength)  {
-		return CosNewNull();
-	}
-	switch (eType)  {
-		case CosArray:
-			coRet = CosArrayGet(m_CosObj, nIndex);
-			break;
-		default:
-			coRet = m_CosObj;
+	if (m_CosObj)  {
+		CosType eType = CosObjGetType(m_CosObj);
+
+		int nLength = 1;
+		if (eType == CosArray)  {
+			nLength = CosArrayLength(m_CosObj);
+		}
+		if (nIndex < nLength)  {
+			switch (eType)  {
+				case CosArray:
+					coRet = CosArrayGet(m_CosObj, nIndex);
+					break;
+				default:
+					coRet = m_CosObj;
+			}
+		}
 	}
 
 	return coRet;
@@ -155,6 +178,8 @@ PDFLObject::Impl::GetElement(int nIndex)
 bool
 PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 {
+	if (!m_CosObj)  { return false; }
+
 	if (m_pDict)  {
 		Dict::const_iterator itFind = m_pDict->find(nmKey);
 		if (itFind != m_pDict->end())  {
@@ -163,8 +188,8 @@ PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 		}
 	}
 
-	CosObj coValue = CosNewNull();
-	CosObj coDict = CosNewNull();
+	CosObjWrapper coValue;
+	CosObjWrapper coDict;
 	switch (CosObjGetType(m_CosObj))  {
 		case CosStream:
 			coDict = CosStreamDict(m_CosObj);
@@ -173,12 +198,12 @@ PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 			coDict = m_CosObj;
 			break;
 	}
-	if (CosObjGetType(coDict) == CosDict)  {
+	if (coDict)  {
 		ASAtom atmKey = GetAtom(nmKey);
 		if (CosDictKnown(coDict, atmKey))  {
 			coValue = CosDictGet(coDict, atmKey);
 		}
-		if (CosObjGetType(coValue) != CosNull)  {
+		if (coValue)  {
 			if (!m_pDict)  {
 				m_pDict.reset(Dict());
 			}
@@ -236,12 +261,14 @@ PDFLObject::Impl::GetAtom(const Name &nmValue)
 bool
 PDFLObject::Impl::GetKeys(NameSet &setKeys)
 {
+	if (!m_CosObj)  { return false; }
+
 	CosType eType = CosObjGetType(m_CosObj);
 	if (eType == CosDict || eType == CosStream)  {
 		if (!m_psetNames)  {
 			m_psetNames.reset(NameSet());
 		}
-		CosObj coDict = (eType == CosStream ? CosStreamDict(m_CosObj) : m_CosObj);
+		CosObjWrapper coDict = (eType == CosStream ? CosStreamDict(m_CosObj) : m_CosObj);
 		if (CosObjEnum(coDict, DictEnum, this))  {
 			setKeys = *m_psetNames;
 			return true;
@@ -261,10 +288,10 @@ PDFLObject::Impl::DictEnum(CosObj inCosObj, CosObj , void *inClientData)
 }
 
 
-PDFLObject::PDFLObject(CosObj coObject, PDFLDoc *pDoc)
+PDFLObject::PDFLObject(CosObjWrapper coObject, PDFLDoc *pDoc)
 : m_pImpl(new Impl(coObject, pDoc))
 {
-	if (CosObjGetType(coObject) != CosNull) {
+	if (coObject)  {
 		TypeMap::const_iterator itType = g_mTypeMap.find(CosObjGetType(coObject));
 		if (itType != g_mTypeMap.end())  {
 			m_eType = itType->second;
@@ -275,7 +302,7 @@ PDFLObject::PDFLObject(CosObj coObject, PDFLDoc *pDoc)
 bool
 PDFLObject::IsIndirect() const
 {
-	return CosObjGetType(m_pImpl->m_CosObj) != CosNull && CosObjIsIndirect(m_pImpl->m_CosObj);
+	return m_pImpl->m_CosObj && CosObjIsIndirect(m_pImpl->m_CosObj);
 }
 
 Object::ID
@@ -291,8 +318,8 @@ PDFLObject::GetID() const
 bool
 PDFLObject::Get(bool &bValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosBoolean)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosBoolean)  {
 		bValue = CosBooleanValue(coValue) != 0;
 		return true;
 	}
@@ -302,8 +329,8 @@ PDFLObject::Get(bool &bValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(int &nValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosInteger)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosInteger)  {
 		nValue = CosIntegerValue(coValue);
 		return true;
 	}
@@ -313,8 +340,8 @@ PDFLObject::Get(int &nValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(unsigned int &nValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosInteger)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosInteger)  {
 		int nTemp = CosIntegerValue(coValue);
 		if (nTemp >= 0)  {
 			nValue = nTemp;
@@ -327,8 +354,8 @@ PDFLObject::Get(unsigned int &nValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(float &fValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosFixed)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosFixed)  {
 		fValue = ASFixedToFloat(CosFixedValue(coValue));
 		return true;
 	}
@@ -338,8 +365,8 @@ PDFLObject::Get(float &fValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(double &dValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosFixed)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosFixed)  {
 		dValue = ASFixedToFloat(CosFixedValue(coValue));
 		return true;
 	}
@@ -349,8 +376,8 @@ PDFLObject::Get(double &dValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(Name &rValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosName)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosName)  {
 		rValue = m_pImpl->GetName(CosNameValue(coValue));
 		return rValue.IsValid();
 	}
@@ -360,8 +387,8 @@ PDFLObject::Get(Name &rValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(std::string &sValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) == CosString)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue && CosObjGetType(coValue) == CosString)  {
 		ASInt32 nLength;
 		const char *szValue = CosStringValue(coValue, &nLength);
 		if (szValue)  {
@@ -375,8 +402,8 @@ PDFLObject::Get(std::string &sValue, int nIndex /*= 0 */)
 bool
 PDFLObject::Get(Object::Ptr &pValue, int nIndex /*= 0 */)
 {
-	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (CosObjGetType(coValue) != CosNull)  {
+	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+	if (coValue)  {
 		m_pImpl->m_pDoc->CreateObject(coValue, pValue);
 		return true;
 	}
@@ -606,16 +633,20 @@ struct ASPathName_deleter  {
 PDFLDoc::MyImpl::MyImpl(PDFLDoc *pOwner, const std::string &sFileName)
 : m_pOwner(pOwner), m_pdDoc(NULL), m_cdDoc(NULL)
 {
-	Open(sFileName);
+	if (!sFileName.empty())  {
+		Open(sFileName);
+	}
 }
 
 bool
 PDFLDoc::MyImpl::Open(const std::string &sFileName)
 {
-	bool success = false;
+	bool bSuccess = false;
 
 	if (!sFileName.empty())  {
-		InitPDFL();
+		if (!PDFLInitter::Get()->IsValid())  {
+			return false;
+		}
 
 		DURING
 			boost::shared_ptr<void> aspFile(
@@ -626,12 +657,12 @@ PDFLDoc::MyImpl::Open(const std::string &sFileName)
 			m_pdDoc = PDDocOpen((ASPathName)aspFile.get(), NULL, NULL, false);
 			if (m_pdDoc)  {
 				m_cdDoc = PDDocGetCosDoc(m_pdDoc);
-				success = true;
+				bSuccess = true;
 			}
 		HANDLER
 		END_HANDLER
 	}
-	return success;
+	return bSuccess;
 }
 
 bool
@@ -643,8 +674,8 @@ PDFLDoc::MyImpl::GetObject(Object::ID nID, Object::Ptr &pObject)
 			pObject = itFind->second;
 			return true;
 		}
-		CosObj coFind = CosDocGetObjByID(m_cdDoc, nID);
-		if (CosObjGetType(coFind) != CosNull)  {
+		CosObjWrapper coFind = CosDocGetObjByID(m_cdDoc, nID);
+		if (coFind)  {
 			m_mObjects[nID].reset(new PDFLObject(coFind, m_pOwner));
 			pObject = m_mObjects[nID];
 		}
@@ -668,8 +699,8 @@ PDFLDoc::IsValid() const
 bool
 PDFLDoc::GetCatalog(Object::Ptr &pCatalog) const
 {
-	CosObj coRoot = CosDocGetRoot(m_pMyImpl->m_cdDoc);
-	if (CosObjGetType(coRoot) == CosDict)  {
+	CosObjWrapper coRoot = CosDocGetRoot(m_pMyImpl->m_cdDoc);
+	if (coRoot)  {
 		CreateObject(coRoot, pCatalog);
 		return true;
 	}
@@ -679,7 +710,7 @@ PDFLDoc::GetCatalog(Object::Ptr &pCatalog) const
 PDFVersion
 PDFLDoc::GetVersion() const
 {
-	ASInt16 nMajor, nMinor;
+	ASInt16 nMajor = 0, nMinor = 0;
 	PDDocGetVersion(m_pMyImpl->m_pdDoc, &nMajor, &nMinor);
 	return PDFVersion(nMajor, nMinor);
 }
@@ -691,7 +722,7 @@ PDFLDoc::GetObject(Object::ID nID, Object::Ptr &pObject) const
 }
 
 void
-PDFLDoc::CreateObject(CosObj coObject, Object::Ptr &pObject) const
+PDFLDoc::CreateObject(CosObjWrapper coObject, Object::Ptr &pObject) const
 {
 	if (CosObjIsIndirect(coObject))  {
 		GetObject(CosObjGetID(coObject), pObject);

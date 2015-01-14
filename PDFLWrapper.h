@@ -18,6 +18,28 @@
 
 namespace PDFLibWrapper  {
 
+	class CosObjWrapper  {
+	public:
+		CosObjWrapper(CosObj co) : m_bInitialized(true), m_coObject(co)  { }
+		CosObjWrapper() : m_bInitialized(false)  { }
+
+		CosObjWrapper &operator=(CosObj co)  {
+			m_bInitialized = true;
+			m_coObject = co;
+			return *this;
+		}
+
+		operator void*() const  { return (void *)m_bInitialized; }
+		operator bool() const  { return m_bInitialized; }
+		bool operator!() const  { return !m_bInitialized; }
+
+		operator CosObj() const  { assert(m_bInitialized); return m_coObject; }
+
+	private:
+		bool m_bInitialized;
+		CosObj m_coObject;
+	};
+
 	class PDFLDoc;
 
 	class PDFLObject : public Object  {
@@ -63,7 +85,7 @@ namespace PDFLibWrapper  {
 
 		struct Impl;
 	private:
-		PDFLObject(CosObj coObject, PDFLDoc *pDoc);
+		PDFLObject(CosObjWrapper coObject, PDFLDoc *pDoc);
 
 		boost::shared_ptr<Impl> m_pImpl;
 
@@ -81,7 +103,7 @@ namespace PDFLibWrapper  {
 		virtual bool GetCatalog(Object::Ptr &pCatalog) const;
 
 		bool GetObject(Object::ID nID, Object::Ptr &pObject) const;
-		void CreateObject(CosObj coObject, Object::Ptr &pObject) const;
+		void CreateObject(CosObjWrapper coObject, Object::Ptr &pObject) const;
 
 		struct MyImpl;
 
