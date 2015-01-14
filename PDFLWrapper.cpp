@@ -612,7 +612,7 @@ PDFLDoc::MyImpl::MyImpl(PDFLDoc *pOwner, const std::string &sFileName)
 bool
 PDFLDoc::MyImpl::Open(const std::string &sFileName)
 {
-	bool success = false;	// NOTE: need this since you shouldn't inside a DURING handler block
+	bool success = false;
 
 	if (!sFileName.empty())  {
 		InitPDFL();
