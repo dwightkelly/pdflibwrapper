@@ -330,4 +330,63 @@ Object::GetObjectDescription(std::string &sDesc, Path &vPath, bool bNeedParent,
 	}
 }
 
+std::string
+Object::GetString()
+{
+	std::stringstream ss;
+	switch (m_eType)  {
+		case kBoolean:
+			{
+				bool bValue;
+				if (Get(bValue))  {
+					ss << std::boolalpha << bValue;
+				}
+			}
+			break;
+		case kInteger:
+			{
+				int nValue;
+				if (Get(nValue))  {
+					ss << nValue;
+				}
+			}
+			break;
+		case kFixed:
+			{
+				double dValue;
+				if (Get(dValue))  {
+					ss << dValue;
+				}
+			}
+			break;
+		case kName:
+			{
+				Name nmValue;
+				if (Get(nmValue))  {
+					ss << '/' << nmValue.GetString();
+				}
+			}
+			break;
+		case kString:
+			{
+				std::string sValue;
+				if (Get(sValue))  {
+					ss << '(' << sValue << ')';
+				}
+			}
+			break;
+		case kArray:
+			ss << "[...]";
+			break;
+		case kDict:
+			ss << "<<...>>";
+			break;
+		case kStream:
+			ss << "{stream}";
+			break;
+	}
+
+	return ss.str();
+}
+
 }

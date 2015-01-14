@@ -26,6 +26,8 @@ namespace PDFLibWrapper  {
 			: m_nMajor(nMajor), m_nMinor(nMinor)
 		{ }
 
+		bool IsSet() const  { return m_nMajor > 0 && m_nMinor > 0; }
+
 		bool operator<(const PDFVersion &rOther) const  {
 			return m_nMajor < rOther.m_nMajor ||
 				(m_nMajor == rOther.m_nMajor && m_nMinor < rOther.m_nMinor);
@@ -171,6 +173,8 @@ namespace PDFLibWrapper  {
 		virtual bool Get(Object::Ptr &pValue, const Name &nmKey) = 0;
 		virtual bool Get(Buffer &oValue, const Name &nmKey) = 0;
 		virtual bool Get(Stream &oValue, const Name &nmKey) = 0;
+
+		std::string GetString();
 
 		static void GetObjectDescription(std::string &sDesc, Path &vPath,
 			bool bNeedParent, bool bFullPath = false);
