@@ -10,7 +10,10 @@
 
 #include "PDFLibWrapper.h"
 
-#include <CosCalls.h>
+#include "Environ.h"
+#include "PICommon.h"
+#include "CorCalls.h"
+#include "CosCalls.h"
 
 
 namespace PDFLibWrapper  {

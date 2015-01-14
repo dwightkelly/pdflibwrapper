@@ -12,9 +12,13 @@
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/assign/list_of.hpp>
 
+#ifdef ADOBE_PDFL
+#include "PDFLInitCommon.h"
+#else
 #include "PDFInit.h"
-#include "CosCalls.h"
+#endif
 #include "PDCalls.h"
+#include "ASCalls.h"
 
 namespace  {
 
@@ -40,7 +44,7 @@ namespace  {
 			HANDLER
 				nRet = ERRORCODE;
 			END_HANDLER
-			g_bInitted = nRet == 0;
+			g_bInitted = (nRet == 0);
 		}
 
 		return nRet == 0;
@@ -125,16 +129,16 @@ PDFLObject::Impl::GetLength()
 CosObj
 PDFLObject::Impl::GetElement(int nIndex)
 {
-	if (!m_CosObj)  { return NULL; }
-
-	CosObj coRet = NULL;
 	CosType eType = CosObjGetType(m_CosObj);
+	if (eType == CosNull)  { return CosNewNull(); }
+
+	CosObj coRet;
 	int nLength = 1;
 	if (eType == CosArray)  {
 		nLength = CosArrayLength(m_CosObj);
 	}
 	if (nIndex >= nLength)  {
-		return NULL;
+		return CosNewNull();
 	}
 	switch (eType)  {
 		case CosArray:
@@ -159,8 +163,8 @@ PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 		}
 	}
 
-	CosObj coValue = NULL;
-	CosObj coDict = NULL;
+	CosObj coValue = CosNewNull();
+	CosObj coDict = CosNewNull();
 	switch (CosObjGetType(m_CosObj))  {
 		case CosStream:
 			coDict = CosStreamDict(m_CosObj);
@@ -169,12 +173,12 @@ PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 			coDict = m_CosObj;
 			break;
 	}
-	if (coDict)  {
+	if (CosObjGetType(coDict) == CosDict)  {
 		ASAtom atmKey = GetAtom(nmKey);
 		if (CosDictKnown(coDict, atmKey))  {
 			coValue = CosDictGet(coDict, atmKey);
 		}
-		if (coValue)  {
+		if (CosObjGetType(coValue) != CosNull)  {
 			if (!m_pDict)  {
 				m_pDict.reset(Dict());
 			}
@@ -260,7 +264,7 @@ PDFLObject::Impl::DictEnum(CosObj inCosObj, CosObj , void *inClientData)
 PDFLObject::PDFLObject(CosObj coObject, PDFLDoc *pDoc)
 : m_pImpl(new Impl(coObject, pDoc))
 {
-	if (coObject)  {
+	if (CosObjGetType(coObject) != CosNull) {
 		TypeMap::const_iterator itType = g_mTypeMap.find(CosObjGetType(coObject));
 		if (itType != g_mTypeMap.end())  {
 			m_eType = itType->second;
@@ -271,7 +275,7 @@ PDFLObject::PDFLObject(CosObj coObject, PDFLDoc *pDoc)
 bool
 PDFLObject::IsIndirect() const
 {
-	return m_pImpl->m_CosObj && CosObjIsIndirect(m_pImpl->m_CosObj);
+	return CosObjGetType(m_pImpl->m_CosObj) != CosNull && CosObjIsIndirect(m_pImpl->m_CosObj);
 }
 
 Object::ID
@@ -372,7 +376,7 @@ bool
 PDFLObject::Get(Object::Ptr &pValue, int nIndex /*= 0 */)
 {
 	CosObj coValue = m_pImpl->GetElement(nIndex);
-	if (coValue)  {
+	if (CosObjGetType(coValue) != CosNull)  {
 		m_pImpl->m_pDoc->CreateObject(coValue, pValue);
 		return true;
 	}
@@ -617,7 +621,7 @@ PDFLDoc::MyImpl::Open(const std::string &sFileName)
 				ASPathName_deleter()
 				);
 
-			m_pdDoc = PDDocOpen(aspFile.get(), NULL, NULL, false);
+			m_pdDoc = PDDocOpen((ASPathName)aspFile.get(), NULL, NULL, false);
 			if (m_pdDoc)  {
 				m_cdDoc = PDDocGetCosDoc(m_pdDoc);
 				return true;
@@ -638,7 +642,7 @@ PDFLDoc::MyImpl::GetObject(Object::ID nID, Object::Ptr &pObject)
 			return true;
 		}
 		CosObj coFind = CosDocGetObjByID(m_cdDoc, nID);
-		if (coFind)  {
+		if (CosObjGetType(coFind) != CosNull)  {
 			m_mObjects[nID].reset(new PDFLObject(coFind, m_pOwner));
 			pObject = m_mObjects[nID];
 		}
@@ -663,7 +667,7 @@ bool
 PDFLDoc::GetCatalog(Object::Ptr &pCatalog) const
 {
 	CosObj coRoot = CosDocGetRoot(m_pMyImpl->m_cdDoc);
-	if (coRoot)  {
+	if (CosObjGetType(coRoot) == CosDict)  {
 		CreateObject(coRoot, pCatalog);
 		return true;
 	}
