@@ -44,12 +44,16 @@ namespace PDFLibWrapper  {
 
 	class PDFLObject : public Object  {
 	public:
+		virtual Document *GetDoc() const;
+
 		virtual bool IsIndirect() const;
 		virtual ID GetID() const;
 
 		virtual int GetLength() const;
 
 		virtual bool GetKeys(NameSet &setKeys);
+		virtual bool HasKey(const Name &nmKey);
+		virtual bool HasKey(const char *szKey);
 
 		using Object::Get;
 		virtual bool Get(bool &bValue, int nIndex = 0);

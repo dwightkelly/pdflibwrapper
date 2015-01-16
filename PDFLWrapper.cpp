@@ -121,6 +121,9 @@ struct PDFLObject::Impl  {
 
 	static ASBool DictEnum(CosObj inCosObj, CosObj inValue, void *inClientData);
 
+	bool HasKey(const Name &nmKey);
+
+
 	PDFLDoc *m_pDoc;
 	CosObjWrapper m_CosObj;
 	A2NMap m_mA2NMap;
@@ -174,6 +177,36 @@ PDFLObject::Impl::GetElement(int nIndex)
 	return coRet;
 }
 
+bool
+PDFLObject::Impl::HasKey(const Name &nmKey)
+{
+	if (!m_CosObj)  { return false; }
+
+	if (m_pDict)  {
+		Dict::const_iterator itFind = m_pDict->find(nmKey);
+		if (itFind != m_pDict->end())  {
+			return true;
+		}
+	}
+
+	CosObjWrapper coValue;
+	CosObjWrapper coDict;
+	switch (CosObjGetType(m_CosObj))  {
+		case CosStream:
+			coDict = CosStreamDict(m_CosObj);
+			break;
+		case CosDict:
+			coDict = m_CosObj;
+			break;
+	}
+	if (coDict)  {
+		ASAtom atmKey = GetAtom(nmKey);
+		if (CosDictKnown(coDict, atmKey))  {
+			return true;
+		}
+	}
+	return false;
+}
 
 bool
 PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
@@ -615,6 +648,24 @@ PDFLObject::GetKeys(NameSet &setKeys)
 	return m_pImpl->GetKeys(setKeys);
 }
 
+Document *
+PDFLObject::GetDoc() const
+{
+	return m_pImpl->m_pDoc;
+}
+
+bool
+PDFLObject::HasKey(const Name &nmKey)
+{
+	return m_pImpl->HasKey(nmKey);
+}
+
+bool
+PDFLObject::HasKey(const char *szKey)
+{
+	return HasKey(m_pImpl->GetName(szKey));
+}
+
 
 struct PDFLDoc::MyImpl  {
 	typedef std::map<Object::ID, boost::shared_ptr<PDFLObject> > ObjectMap;
@@ -683,6 +734,7 @@ PDFLDoc::MyImpl::GetObject(Object::ID nID, Object::Ptr &pObject)
 		if (coFind)  {
 			m_mObjects[nID].reset(new PDFLObject(coFind, m_pOwner));
 			pObject = m_mObjects[nID];
+			return true;
 		}
 	}
 	return false;
