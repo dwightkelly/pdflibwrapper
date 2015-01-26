@@ -251,7 +251,14 @@ Object::GetType(const std::string &sType)
 Object::Type
 Object::GetTypeName(std::string &sName) const
 {
-	switch (m_eType)  {
+	GetTypeName(m_eType, sName);
+	return m_eType;
+}
+
+void
+Object::GetTypeName(const Type &eType, std::string &sName)
+{
+	switch (eType)  {
 		case kNull:  sName = "null";  break;
 		case kBoolean:  sName = "boolean";  break;
 		case kInteger:  sName = "integer";  break;
@@ -263,7 +270,6 @@ Object::GetTypeName(std::string &sName) const
 		case kDict:  sName = "dictionary";  break;
 		default:  sName = "unknown";  break;
 	}
-	return m_eType;
 }
 
 
@@ -393,6 +399,15 @@ Object::GetString()
 	}
 
 	return ss.str();
+}
+
+
+std::string
+PDFVersion::AsString() const
+{
+	char szTemp[20];
+	sprintf(szTemp, "%d.%d", m_nMajor, m_nMinor);
+	return szTemp;
 }
 
 }

@@ -27,6 +27,7 @@ namespace PDFLibWrapper  {
 		{ }
 
 		bool IsSet() const  { return m_nMajor > 0 && m_nMinor > 0; }
+		std::string AsString() const;
 
 		bool operator<(const PDFVersion &rOther) const  {
 			return m_nMajor < rOther.m_nMajor ||
@@ -87,6 +88,8 @@ namespace PDFLibWrapper  {
 	};
 	typedef std::set<Name> NameSet;
 
+	class Document;
+
 	class Object
 	{
 	public:
@@ -98,10 +101,6 @@ namespace PDFLibWrapper  {
 		typedef long ID;
 		typedef boost::variant<long, Name> Selector;
 		struct PathElement  {
-// 			PathElement(const Selector &oSelector = Name(), 
-// 				ID nID = Object::kInvalidID)
-// 			: m_pObject(NULL), m_oWayToThis(oSelector), m_nObjectID(nID)
-// 			{ }
 			PathElement(const Selector &oSelector = Name(),
 				Object *pObject = NULL, ID nID = Object::kInvalidID)
 				: m_pObject(pObject), m_oWayToThis(oSelector),
@@ -117,11 +116,14 @@ namespace PDFLibWrapper  {
 		};
 		typedef std::vector<PathElement> Path;
 
-		enum  { kInvalidID = boost::integer_traits<ID>::const_max };
+		enum  { kInvalidID = -1 };
+
+		virtual Document *GetDoc() const = 0;
 
 		Type GetType() const  { return m_eType; }
 		Type GetTypeName(std::string &sName) const;
 		static Type GetType(const std::string &sType);
+		static void GetTypeName(const Type &eType, std::string &sName);
 
 		virtual bool IsIndirect() const = 0;
 		virtual ID GetID() const = 0;
@@ -129,6 +131,9 @@ namespace PDFLibWrapper  {
 		virtual int GetLength() const = 0;
 
 		virtual bool GetKeys(NameSet &setKeys) = 0;
+		virtual bool HasKey(const Name &nmKey) = 0;
+		virtual bool HasKey(const char *szKey) = 0;
+		virtual bool HasKey(const std::string &sKey)  { return HasKey(sKey.c_str()); }
 
 		virtual bool Get(bool &bValue, int nIndex = 0) = 0;
 		virtual bool Get(int &nValue, int nIndex = 0) = 0;
@@ -185,6 +190,8 @@ namespace PDFLibWrapper  {
 		Type m_eType;
 		//ID m_nID;
 	};
+
+	typedef std::vector<Object::Ptr> ObjectList;
 
 	class Document
 	{
