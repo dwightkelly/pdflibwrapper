@@ -7,6 +7,8 @@
 
 #include "PDFLWrapper.h"
 
+#include <iostream>
+
 #include <boost/optional.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/shared_mutex.hpp>
@@ -90,6 +92,17 @@ namespace  {
 
 	TypeMap g_mTypeMap = CreateTypeMap();
 
+	void
+	ReportSPDFError(const char *szMessage, ASErrorCode nError)
+	{
+		std::cerr << szMessage;
+		char szError[256] = {0};
+		if (ASGetErrorString(nError, szError, sizeof(szError)))  {
+			std::cerr << ":  " << szError;
+		}
+		std::cerr << std::endl;
+	}
+
 }
 
 
@@ -141,11 +154,15 @@ int
 PDFLObject::Impl::GetLength()
 {
 	if (m_CosObj)  {
-		if (CosObjGetType(m_CosObj) == CosArray)  {
-			return CosArrayLength(m_CosObj);
-		} else  {
-			return 1;
-		}
+		DURING
+			if (CosObjGetType(m_CosObj) == CosArray)  {
+				return CosArrayLength(m_CosObj);
+			} else  {
+				return 1;
+			}
+		HANDLER
+			ReportSPDFError("Error getting length", ERRORCODE);
+		END_HANDLER
 	}
 
 	return 0;
@@ -157,21 +174,25 @@ PDFLObject::Impl::GetElement(int nIndex)
 	CosObjWrapper coRet;
 
 	if (m_CosObj)  {
-		CosType eType = CosObjGetType(m_CosObj);
+		DURING
+			CosType eType = CosObjGetType(m_CosObj);
 
-		int nLength = 1;
-		if (eType == CosArray)  {
-			nLength = CosArrayLength(m_CosObj);
-		}
-		if (nIndex < nLength)  {
-			switch (eType)  {
-				case CosArray:
-					coRet = CosArrayGet(m_CosObj, nIndex);
-					break;
-				default:
-					coRet = m_CosObj;
+			int nLength = 1;
+			if (eType == CosArray)  {
+				nLength = CosArrayLength(m_CosObj);
 			}
-		}
+			if (nIndex < nLength)  {
+				switch (eType)  {
+					case CosArray:
+						coRet = CosArrayGet(m_CosObj, nIndex);
+						break;
+					default:
+						coRet = m_CosObj;
+				}
+			}
+		HANDLER
+			ReportSPDFError("Error getting object in GetElement", ERRORCODE);
+		END_HANDLER
 	}
 
 	return coRet;
@@ -189,22 +210,27 @@ PDFLObject::Impl::HasKey(const Name &nmKey)
 		}
 	}
 
-	CosObjWrapper coValue;
-	CosObjWrapper coDict;
-	switch (CosObjGetType(m_CosObj))  {
-		case CosStream:
-			coDict = CosStreamDict(m_CosObj);
-			break;
-		case CosDict:
-			coDict = m_CosObj;
-			break;
-	}
-	if (coDict)  {
-		ASAtom atmKey = GetAtom(nmKey);
-		if (CosDictKnown(coDict, atmKey))  {
-			return true;
+	DURING
+		CosObjWrapper coValue;
+		CosObjWrapper coDict;
+		switch (CosObjGetType(m_CosObj))  {
+			case CosStream:
+				coDict = CosStreamDict(m_CosObj);
+				break;
+			case CosDict:
+				coDict = m_CosObj;
+				break;
 		}
-	}
+		if (coDict)  {
+			ASAtom atmKey = GetAtom(nmKey);
+			if (CosDictKnown(coDict, atmKey))  {
+				return true;
+			}
+		}
+	HANDLER
+		ReportSPDFError("Error in HasKey", ERRORCODE);
+	END_HANDLER
+
 	return false;
 }
 
@@ -223,29 +249,34 @@ PDFLObject::Impl::GetValue(const Name &nmKey, Object::Ptr &pObj)
 
 	CosObjWrapper coValue;
 	CosObjWrapper coDict;
-	switch (CosObjGetType(m_CosObj))  {
-		case CosStream:
-			coDict = CosStreamDict(m_CosObj);
-			break;
-		case CosDict:
-			coDict = m_CosObj;
-			break;
-	}
-	if (coDict)  {
-		ASAtom atmKey = GetAtom(nmKey);
-		if (CosDictKnown(coDict, atmKey))  {
-			coValue = CosDictGet(coDict, atmKey);
+	DURING
+		switch (CosObjGetType(m_CosObj))  {
+			case CosStream:
+				coDict = CosStreamDict(m_CosObj);
+				break;
+			case CosDict:
+				coDict = m_CosObj;
+				break;
 		}
-		if (coValue)  {
-			if (!m_pDict)  {
-				m_pDict.reset(Dict());
+		if (coDict)  {
+			ASAtom atmKey = GetAtom(nmKey);
+			if (CosDictKnown(coDict, atmKey))  {
+				coValue = CosDictGet(coDict, atmKey);
 			}
-			m_pDoc->CreateObject(coValue, pObj);
-			(*m_pDict)[nmKey] = pObj;
-			return true;
+			if (coValue)  {
+				if (!m_pDict)  {
+					m_pDict.reset(Dict());
+				}
+				m_pDoc->CreateObject(coValue, pObj);
+				(*m_pDict)[nmKey] = pObj;
+				return true;
+			}
 		}
-	}
-	pObj.reset();
+	HANDLER
+		ReportSPDFError("Error in GetValue", ERRORCODE);
+	END_HANDLER
+		pObj.reset();
+
 	return false;
 }
 
@@ -296,22 +327,26 @@ PDFLObject::Impl::GetKeys(NameSet &setKeys)
 {
 	if (!m_CosObj)  { return false; }
 
-	CosType eType = CosObjGetType(m_CosObj);
-	if (eType == CosDict || eType == CosStream)  {
-		if (!m_psetNames)  {
-			m_psetNames.reset(NameSet());
+	DURING
+		CosType eType = CosObjGetType(m_CosObj);
+		if (eType == CosDict || eType == CosStream)  {
+			if (!m_psetNames)  {
+				m_psetNames.reset(NameSet());
+			}
+			CosObjWrapper coDict;
+			if (eType == CosStream)  {
+				coDict = CosStreamDict(m_CosObj);
+			} else  {
+				coDict =  m_CosObj;
+			}
+			if (CosObjEnum(coDict, DictEnum, this))  {
+				setKeys = *m_psetNames;
+				return true;
+			}
 		}
-		CosObjWrapper coDict;
-		if (eType == CosStream)  {
-			coDict = CosStreamDict(m_CosObj);
-		} else  {
-			coDict =  m_CosObj;
-		}
-		if (CosObjEnum(coDict, DictEnum, this))  {
-			setKeys = *m_psetNames;
-			return true;
-		}
-	}
+	HANDLER
+		ReportSPDFError("Error getting dictionary keys", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
@@ -340,7 +375,13 @@ PDFLObject::PDFLObject(CosObjWrapper coObject, PDFLDoc *pDoc)
 bool
 PDFLObject::IsIndirect() const
 {
-	return m_pImpl->m_CosObj && CosObjIsIndirect(m_pImpl->m_CosObj);
+	DURING
+		return m_pImpl->m_CosObj && CosObjIsIndirect(m_pImpl->m_CosObj);
+	HANDLER
+		ReportSPDFError("Error in IsIndirect", ERRORCODE);
+	END_HANDLER
+
+	return false;
 }
 
 Object::ID
@@ -348,7 +389,11 @@ PDFLObject::GetID() const
 {
 	ID nRet = kInvalidID;
 	if (IsIndirect())  {
-		nRet = CosObjGetID(m_pImpl->m_CosObj);
+		DURING
+			nRet = CosObjGetID(m_pImpl->m_CosObj);
+		HANDLER
+			ReportSPDFError("Error in GetID", ERRORCODE);
+		END_HANDLER
 	}
 	return nRet;
 }
@@ -356,84 +401,113 @@ PDFLObject::GetID() const
 bool
 PDFLObject::Get(bool &bValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosBoolean)  {
-		bValue = CosBooleanValue(coValue) != 0;
-		return true;
-	}
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosBoolean)  {
+			bValue = CosBooleanValue(coValue) != 0;
+			return true;
+		}
+	HANDLER
+		ReportSPDFError("Error getting boolean value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
 bool
 PDFLObject::Get(int &nValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosInteger)  {
-		nValue = CosIntegerValue(coValue);
-		return true;
-	}
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosInteger)  {
+			nValue = CosIntegerValue(coValue);
+			return true;
+		}
+	HANDLER
+		ReportSPDFError("Error getting int value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
 bool
 PDFLObject::Get(unsigned int &nValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosInteger)  {
-		int nTemp = CosIntegerValue(coValue);
-		if (nTemp >= 0)  {
-			nValue = nTemp;
-			return true;
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosInteger)  {
+			int nTemp = CosIntegerValue(coValue);
+			if (nTemp >= 0)  {
+				nValue = nTemp;
+				return true;
+			}
 		}
-	}
+	HANDLER
+		ReportSPDFError("Error getting unsigned int value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
 bool
 PDFLObject::Get(float &fValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosFixed)  {
-		fValue = ASFixedToFloat(CosFixedValue(coValue));
-		return true;
-	}
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosFixed)  {
+			fValue = ASFixedToFloat(CosFixedValue(coValue));
+			return true;
+		}
+	HANDLER
+		ReportSPDFError("Error getting float value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
 bool
 PDFLObject::Get(double &dValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosFixed)  {
-		dValue = ASFixedToFloat(CosFixedValue(coValue));
-		return true;
-	}
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosFixed)  {
+			dValue = ASFixedToFloat(CosFixedValue(coValue));
+			return true;
+		}
+	HANDLER
+		ReportSPDFError("Error getting double value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
 bool
 PDFLObject::Get(Name &rValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosName)  {
-		rValue = m_pImpl->GetName(CosNameValue(coValue));
-		return rValue.IsValid();
-	}
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosName)  {
+			rValue = m_pImpl->GetName(CosNameValue(coValue));
+			return rValue.IsValid();
+		}
+	HANDLER
+		ReportSPDFError("Error getting Name value", ERRORCODE);
+	END_HANDLER
+
 	return false;
 }
 
 bool
 PDFLObject::Get(std::string &sValue, int nIndex /*= 0 */)
 {
-	CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
-	if (coValue && CosObjGetType(coValue) == CosString)  {
-		ASInt32 nLength;
-		const char *szValue = CosStringValue(coValue, &nLength);
-		if (szValue)  {
-			sValue.assign(szValue, nLength);
-			return true;
+	DURING
+		CosObjWrapper coValue = m_pImpl->GetElement(nIndex);
+		if (coValue && CosObjGetType(coValue) == CosString)  {
+			ASInt32 nLength;
+			const char *szValue = CosStringValue(coValue, &nLength);
+			if (szValue)  {
+				sValue.assign(szValue, nLength);
+				return true;
+			}
 		}
-	}
+	HANDLER
+		ReportSPDFError("Error getting string value", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
@@ -716,6 +790,7 @@ PDFLDoc::MyImpl::Open(const std::string &sFileName)
 				bSuccess = true;
 			}
 		HANDLER
+			ReportSPDFError("Error opening file", ERRORCODE);
 		END_HANDLER
 	}
 	return bSuccess;
@@ -730,12 +805,16 @@ PDFLDoc::MyImpl::GetObject(Object::ID nID, Object::Ptr &pObject)
 			pObject = itFind->second;
 			return true;
 		}
-		CosObjWrapper coFind = CosDocGetObjByID(m_cdDoc, nID);
-		if (coFind)  {
-			m_mObjects[nID].reset(new PDFLObject(coFind, m_pOwner));
-			pObject = m_mObjects[nID];
-			return true;
-		}
+		DURING
+			CosObjWrapper coFind = CosDocGetObjByID(m_cdDoc, nID);
+			if (coFind)  {
+				m_mObjects[nID].reset(new PDFLObject(coFind, m_pOwner));
+				pObject = m_mObjects[nID];
+				return true;
+			}
+	HANDLER
+		ReportSPDFError("Error getting object by ID", ERRORCODE);
+	END_HANDLER
 	}
 	return false;
 }
@@ -756,11 +835,15 @@ PDFLDoc::IsValid() const
 bool
 PDFLDoc::GetCatalog(Object::Ptr &pCatalog) const
 {
-	CosObjWrapper coRoot = CosDocGetRoot(m_pMyImpl->m_cdDoc);
-	if (coRoot)  {
-		CreateObject(coRoot, pCatalog);
-		return true;
-	}
+	DURING
+		CosObjWrapper coRoot = CosDocGetRoot(m_pMyImpl->m_cdDoc);
+		if (coRoot)  {
+			CreateObject(coRoot, pCatalog);
+			return true;
+		}
+	HANDLER
+		ReportSPDFError("Error getting Catalog", ERRORCODE);
+	END_HANDLER
 	return false;
 }
 
@@ -768,7 +851,11 @@ PDFVersion
 PDFLDoc::GetVersion() const
 {
 	ASInt16 nMajor = 0, nMinor = 0;
-	PDDocGetVersion(m_pMyImpl->m_pdDoc, &nMajor, &nMinor);
+	DURING
+		PDDocGetVersion(m_pMyImpl->m_pdDoc, &nMajor, &nMinor);
+	HANDLER
+		ReportSPDFError("Error getting version", ERRORCODE);
+	END_HANDLER
 	return PDFVersion(nMajor, nMinor);
 }
 
@@ -781,11 +868,15 @@ PDFLDoc::GetObject(Object::ID nID, Object::Ptr &pObject) const
 void
 PDFLDoc::CreateObject(CosObjWrapper coObject, Object::Ptr &pObject) const
 {
-	if (CosObjIsIndirect(coObject))  {
-		GetObject(CosObjGetID(coObject), pObject);
-	} else  {
-		pObject.reset(new PDFLObject(coObject, const_cast<PDFLDoc *>(this)));
-	}
+	DURING
+		if (CosObjIsIndirect(coObject))  {
+			GetObject(CosObjGetID(coObject), pObject);
+		} else  {
+			pObject.reset(new PDFLObject(coObject, const_cast<PDFLDoc *>(this)));
+		}
+	HANDLER
+		ReportSPDFError("Error in CreateObject", ERRORCODE);
+	END_HANDLER
 }
 
 Document *

@@ -54,6 +54,7 @@ namespace PDFLibWrapper  {
 		virtual bool GetKeys(NameSet &setKeys);
 		virtual bool HasKey(const Name &nmKey);
 		virtual bool HasKey(const char *szKey);
+		using Object::HasKey;
 
 		using Object::Get;
 		virtual bool Get(bool &bValue, int nIndex = 0);
